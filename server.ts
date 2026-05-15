@@ -56,6 +56,55 @@ async function startServer() {
     }
   });
 
+  app.post("/api/suggest", async (req, res) => {
+    try {
+      const { text } = req.body;
+      
+      if (!text || text.trim().length < 3) {
+        return res.json({ suggestions: [] });
+      }
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Gemini API Key is not configured." });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const systemInstruction = "You are an auto-suggest autocomplete tool. Provide 3 short phrases (max 5 words each) that logically complete or continue the user's text. Reply with ONLY a JSON array of strings (e.g. [\"first suggestion\", \"second option\", \"third idea\"]).";
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: text,
+        config: {
+          systemInstruction,
+          temperature: 0.3,
+          responseMimeType: "application/json",
+        },
+      });
+
+      let suggestions: string[] = [];
+      try {
+        if (response.text) {
+          suggestions = JSON.parse(response.text);
+        }
+      } catch (e) {
+        console.error("Failed to parse suggestions", e, response.text);
+      }
+
+      res.json({ suggestions });
+    } catch (error: any) {
+      console.error("Error in suggest API:", error);
+      res.status(500).json({ error: "Failed to generate suggestions" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

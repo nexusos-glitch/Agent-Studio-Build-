@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock } from "lucide-react";
+import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock, Download, FileText, File } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
 import { Label } from "./components/ui/label";
@@ -7,8 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Separator } from "./components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./components/ui/sheet";
 import { ScrollArea } from "./components/ui/scroll-area";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu";
 import { Toaster, toast } from "sonner";
 import ReactMarkdown from 'react-markdown';
+import { jsPDF } from "jspdf";
+import { Document, Packer, Paragraph, TextRun } from "docx";
+import { saveAs } from "file-saver";
 
 interface HistoryItem {
   id: string;
@@ -36,6 +40,11 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionTimeoutRef = useRef<any>(null);
+
   const recognitionRef = useRef<any>(null);
   const originalTextRef = useRef("");
 
@@ -48,6 +57,52 @@ export default function App() {
         console.error("Failed to load history", e);
       }
     }
+
+    const savedInputText = localStorage.getItem("polisher_draft_input");
+    if (savedInputText) {
+      setInputText(savedInputText);
+    }
+  }, []);
+
+  const inputTextRef = useRef(inputText);
+  useEffect(() => {
+    inputTextRef.current = inputText;
+
+    // Handle auto-suggest
+    if (inputText.trim().length > 3) {
+      if (suggestionTimeoutRef.current) clearTimeout(suggestionTimeoutRef.current);
+      
+      suggestionTimeoutRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch("/api/suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: inputText }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.suggestions && data.suggestions.length > 0) {
+              setSuggestions(data.suggestions);
+              setShowSuggestions(true);
+            } else {
+              setShowSuggestions(false);
+            }
+          }
+        } catch (e) {
+          console.error("Suggest error:", e);
+        }
+      }, 600); // 600ms debounce
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [inputText]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      localStorage.setItem("polisher_draft_input", inputTextRef.current);
+    }, 30000);
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -170,6 +225,57 @@ export default function App() {
     setIsCopied(true);
     toast("Copied to clipboard");
     setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const downloadTxt = () => {
+    if (!outputText) return;
+    const blob = new Blob([outputText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `polished_text_${new Date().getTime()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Text exported as .txt");
+  };
+
+  const downloadDocx = async () => {
+    if (!outputText) return;
+    try {
+      const doc = new Document({
+        sections: [
+          {
+            properties: {},
+            children: outputText.split('\n').map(line => new Paragraph({
+              children: [new TextRun(line)],
+            })),
+          },
+        ],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `polished_text_${new Date().getTime()}.docx`);
+      toast.success("Text exported as .docx");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to export as .docx");
+    }
+  };
+
+  const downloadPdf = () => {
+    if (!outputText) return;
+    try {
+      const doc = new jsPDF();
+      const splitText = doc.splitTextToSize(outputText, 180);
+      doc.text(splitText, 15, 15);
+      doc.save(`polished_text_${new Date().getTime()}.pdf`);
+      toast.success("Text exported as .pdf");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to export as .pdf");
+    }
   };
 
   const revertToHistory = (item: HistoryItem) => {
@@ -296,12 +402,35 @@ export default function App() {
                   <span className="text-xs text-slate-400 font-mono">{inputText.length} chars</span>
                 </div>
               </div>
-              <Textarea 
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 p-4 md:p-6 text-[15px] leading-relaxed font-sans placeholder:text-slate-400 rounded-none bg-white" 
-                placeholder="Paste, type, or dictate the text you want to improve here..." 
-              />
+              <div className="relative flex-1 flex flex-col">
+                <Textarea 
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 p-4 md:p-6 text-[15px] leading-relaxed font-sans placeholder:text-slate-400 rounded-none bg-white" 
+                  placeholder="Paste, type, or dictate the text you want to improve here..." 
+                />
+                
+                {/* Auto Suggestions */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute bottom-4 left-4 z-10 flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2">
+                    {suggestions.map((suggestion, i) => (
+                      <button 
+                        key={i}
+                        onClick={() => {
+                          const newText = inputText + (inputText.endsWith(' ') ? '' : ' ') + suggestion;
+                          setInputText(newText);
+                          setShowSuggestions(false);
+                          setSuggestions([]);
+                        }}
+                        className="bg-slate-800 text-slate-100 border border-slate-700 text-sm px-3 py-1.5 rounded-full shadow-md hover:bg-slate-700 transition-colors flex items-center gap-1.5 font-medium"
+                      >
+                        <Sparkles size={12} className="text-blue-400" />
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Output Section */}
@@ -313,9 +442,29 @@ export default function App() {
                 </span>
                 <div className="flex items-center gap-2">
                   {outputText && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500" onClick={copyToClipboard} title="Copy to clipboard">
-                      {isCopied ? <Check size={14} /> : <Copy size={14} />}
-                    </Button>
+                    <>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500" onClick={copyToClipboard} title="Copy to clipboard">
+                        {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500" title="Export file">
+                            <Download size={14} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={downloadTxt} className="flex items-center gap-2 cursor-pointer">
+                            <FileText size={14} className="text-slate-500" /> Export as .txt
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={downloadDocx} className="flex items-center gap-2 cursor-pointer">
+                            <File size={14} className="text-slate-500" /> Export as .docx
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={downloadPdf} className="flex items-center gap-2 cursor-pointer">
+                            <File size={14} className="text-slate-500" /> Export as .pdf
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
                   )}
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hidden md:flex" title="Fullscreen">
                     <Maximize2 size={14} />
@@ -361,12 +510,12 @@ export default function App() {
                   <SelectValue placeholder="Select a tone" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Professional">Professional (Business)</SelectItem>
-                  <SelectItem value="Casual">Casual (Friendly)</SelectItem>
-                  <SelectItem value="Academic">Academic (Formal)</SelectItem>
-                  <SelectItem value="Persuasive">Persuasive (Marketing)</SelectItem>
-                  <SelectItem value="Empathetic">Empathetic (Support)</SelectItem>
-                  <SelectItem value="Creative">Creative (Storytelling)</SelectItem>
+                  <SelectItem value="Professional">Professional <span className="text-slate-400 font-normal text-xs ml-1">(Business)</span></SelectItem>
+                  <SelectItem value="Casual">Casual <span className="text-slate-400 font-normal text-xs ml-1">(Friendly)</span></SelectItem>
+                  <SelectItem value="Academic">Academic <span className="text-slate-400 font-normal text-xs ml-1">(Formal)</span></SelectItem>
+                  <SelectItem value="Persuasive">Persuasive <span className="text-slate-400 font-normal text-xs ml-1">(Marketing)</span></SelectItem>
+                  <SelectItem value="Empathetic">Empathetic <span className="text-slate-400 font-normal text-xs ml-1">(Support)</span></SelectItem>
+                  <SelectItem value="Creative">Creative <span className="text-slate-400 font-normal text-xs ml-1">(Storytelling)</span></SelectItem>
                 </SelectContent>
               </Select>
             </div>
