@@ -6,7 +6,7 @@ import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Separator } from "./components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./components/ui/sheet";
-import { ScrollArea } from "./components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "./components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu";
 import { Toaster, toast } from "sonner";
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -514,7 +514,7 @@ export default function App() {
             </Button>
             
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger>
                 <Button variant="ghost" size="sm" className="text-slate-600 font-medium whitespace-nowrap hidden md:flex">
                   <Github size={16} className="mr-2" />
                   GitHub Sync
@@ -552,7 +552,7 @@ export default function App() {
           </Button>
           
           <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-            <SheetTrigger asChild>
+            <SheetTrigger>
               <Button variant="ghost" size="icon" className="text-slate-500" title="View history (⌘/Ctrl + Shift + H)">
                 <History size={18} />
                 <span className="sr-only">History</span>
@@ -609,7 +609,7 @@ export default function App() {
             </SheetContent>
           </Sheet>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger>
               <Button variant="ghost" size="icon" className="rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold ml-2">
                 U
               </Button>
@@ -679,12 +679,36 @@ export default function App() {
                 </div>
                 
                 {/* Chat Input Area */}
-                <div className="p-4 bg-white border-t shrink-0 flex flex-col gap-2">
-                  <div className="flex flex-col border border-slate-200 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 bg-white transition-all duration-200">
-                    <div className="flex items-end p-1 relative">
-                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 shrink-0 m-1">
-                            <Plus size={20} strokeWidth={2.5} />
+                <div className="p-4 bg-white border-t shrink-0 flex flex-col gap-3">
+                  
+                  {/* Suggestions / Errors */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between bg-slate-100/80 border border-slate-200/60 rounded-lg px-3 py-2 text-sm">
+                      <div className="flex items-center gap-2 text-slate-700 font-medium">
+                         <span className="flex items-center justify-center bg-slate-700 text-white rounded p-0.5"><code className="text-[10px]">_&gt;</code></span>
+                         5 errors running the code
+                      </div>
+                      <Button variant="secondary" size="sm" className="h-7 text-xs font-semibold bg-white border border-slate-200 shadow-sm" onClick={() => toast.error("Attempting to fix errors...")}>Fix</Button>
+                    </div>
+                    
+                    <ScrollArea className="w-full">
+                      <div className="flex items-center gap-2 pb-1">
+                        <Button variant="outline" size="sm" className="rounded-full bg-white border-slate-200 shadow-sm text-xs font-medium h-8" onClick={() => toast.info("Opening AI Features...")}>
+                          <Sparkles size={13} className="text-blue-500 mr-1.5" /> AI Features
                         </Button>
+                        <Button variant="outline" size="sm" className="rounded-full bg-white border-slate-200 shadow-sm text-xs font-medium h-8" onClick={() => toast.info("Opening Versioning...")}>
+                          Add Versioning
+                        </Button>
+                        <Button variant="outline" size="sm" className="rounded-full bg-white border-slate-200 shadow-sm text-xs font-medium h-8" onClick={() => toast.info("Opening GitHub Sync settings...")}>
+                          Integrate GitHub Sync
+                        </Button>
+                      </div>
+                      <ScrollBar orientation="horizontal" className="h-0" />
+                    </ScrollArea>
+                  </div>
+
+                  <div className="flex flex-col border border-slate-200 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 bg-slate-50 transition-all duration-200">
+                    <div className="flex items-end p-1 relative bg-white rounded-2xl">
                         <Textarea 
                           value={inputText}
                           onChange={(e) => {
@@ -693,65 +717,36 @@ export default function App() {
                           }}
                           onMouseUp={handleSelection}
                           onKeyUp={handleSelection}
-                          className="flex-1 min-h-[44px] max-h-[160px] resize-none border-0 shadow-none focus-visible:ring-0 p-3 pt-3 text-[15px] leading-relaxed font-sans placeholder:text-slate-400 rounded-none bg-transparent" 
-                          placeholder="Type a message..." 
+                          className="flex-1 min-h-[52px] max-h-[160px] resize-none border-0 shadow-none focus-visible:ring-0 p-3 pt-3.5 px-4 text-[15px] leading-relaxed font-sans placeholder:text-slate-400 rounded-2xl bg-transparent" 
+                          placeholder="Make changes, add new features, ask for anything" 
                           rows={1}
                         />
-                        <div className="flex items-center shrink-0 m-1">
+                        <div className="flex items-center shrink-0 m-1.5 gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className={`h-10 w-10 rounded-full ${isRecording ? 'text-red-500 hover:text-red-600 hover:bg-red-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                            className={`h-9 w-9 rounded-full ${isRecording ? 'text-red-500 hover:text-red-600 hover:bg-red-50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
                             onClick={toggleRecording}
                             title={isRecording ? "Stop recording" : "Start recording"}
                           >
                             {isRecording ? <MicOff size={18} className="animate-pulse" /> : <Mic size={18} />}
                           </Button>
+                          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 shrink-0">
+                              <Plus size={20} />
+                          </Button>
+                          <Button 
+                            variant="default" 
+                            size="icon" 
+                            className="h-9 w-9 bg-slate-800 hover:bg-slate-700 text-white rounded-full shadow-sm"
+                            disabled={!inputText.trim()}
+                            onClick={handlePolish}
+                            title="Send Message"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                          </Button>
                         </div>
                     </div>
-                    {/* Auto Suggestions */}
-                    {showSuggestions && suggestions.length > 0 && !showSynonyms && (
-                      <div className="px-3 pb-3 pt-1 flex flex-wrap gap-2 animate-in fade-in items-center">
-                        {suggestions.length > 3 && (
-                          <button 
-                            onClick={() => setSuggestionIndex(Math.max(0, suggestionIndex - 3))}
-                            disabled={suggestionIndex === 0}
-                            className="bg-slate-100 text-slate-600 hover:bg-slate-200 h-7 w-7 flex justify-center rounded-full transition-colors items-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-slate-200"
-                          >
-                            <ChevronLeft size={14} />
-                          </button>
-                        )}
-                        {suggestions.slice(suggestionIndex, suggestionIndex + 3).map((suggestion, i) => (
-                          <button 
-                            key={suggestionIndex + i}
-                            onClick={() => {
-                              const newText = inputText + (inputText.endsWith(' ') ? '' : ' ') + suggestion;
-                              setInputText(newText);
-                              setShowSuggestions(false);
-                              setSuggestions([]);
-                            }}
-                            className="bg-zinc-800 text-zinc-100 hover:bg-zinc-700 text-xs px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 font-medium border border-zinc-700 shadow-sm"
-                          >
-                            <Sparkles size={10} className="text-blue-400 shrink-0" />
-                            <span className="truncate max-w-[200px]">{suggestion}</span>
-                          </button>
-                        ))}
-                        {suggestions.length > 3 && (
-                          <button 
-                            onClick={() => setSuggestionIndex(Math.min(suggestions.length - 3, suggestionIndex + 3))}
-                            disabled={suggestionIndex >= suggestions.length - 3}
-                            className="bg-slate-100 text-slate-600 hover:bg-slate-200 h-7 w-7 flex justify-center rounded-full transition-colors items-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-slate-200"
-                          >
-                            <ChevronRight size={14} />
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
-                  <div className="text-center pt-1 text-[13px] font-serif text-red-500 tracking-wide">
-                    needs chat input down hear with microphone+ sign to add files ai features to ad and other suggestions
-                  </div>
-                </div>
 
                 {/* Synonyms */}
                 {showSynonyms && (
@@ -790,6 +785,7 @@ export default function App() {
                 )}
               </div>
             </div>
+          </div>
 
             {/* Landing Preview Section */}
             <div className="flex-1 flex flex-col bg-slate-50 relative">
@@ -838,14 +834,49 @@ export default function App() {
                         </div>
                         
                         <div className="w-full mt-16 px-4">
-                           <div className="w-full aspect-[16/9] bg-slate-50 rounded-xl border border-slate-200 shadow-inner overflow-hidden relative group flex items-center justify-center">
-                               {/* Mock dashboard image placeholder */}
-                               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.02] to-slate-500/[0.05]"></div>
-                               <div className="flex flex-col items-center gap-3 opacity-60">
-                                   <div className="w-12 h-12 rounded-xl bg-white shadow-sm border border-slate-200 flex items-center justify-center text-slate-300">
-                                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-                                   </div>
-                                   <span className="text-sm font-medium text-slate-400">Dashboard View</span>
+                           <div className="w-full aspect-[16/9] bg-white rounded-xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.08)] overflow-hidden relative group flex flex-col">
+                               {/* Mock dashboard header */}
+                               <div className="h-12 border-b bg-slate-50 flex items-center px-4 justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex gap-1.5 mr-4">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                                        <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+                                    </div>
+                                    <div className="h-6 w-6 bg-indigo-100 rounded-md flex items-center justify-center text-indigo-600"><Sparkles size={12} /></div>
+                                    <span className="text-sm font-semibold text-slate-700">AgentVerse</span>
+                                  </div>
+                                  <div className="hidden sm:flex items-center gap-3">
+                                    <span className="text-[10px] font-medium text-slate-500 bg-slate-200 px-2 py-1 rounded">Agent Chat</span>
+                                    <span className="text-[10px] font-medium text-slate-500 hover:bg-slate-200 px-2 py-1 rounded cursor-pointer">Version</span>
+                                    <span className="text-[10px] font-medium text-slate-500 hover:bg-slate-200 px-2 py-1 rounded cursor-pointer">Secrets</span>
+                                    <span className="text-[10px] font-medium text-slate-500 hover:bg-slate-200 px-2 py-1 rounded cursor-pointer">Integrations</span>
+                                    <span className="text-[10px] items-center gap-1 font-medium text-slate-500 hover:bg-slate-200 px-2 py-1 rounded cursor-pointer flex"><Github size={10} /> Sync</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                     <div className="h-6 w-16 bg-blue-600 rounded text-[10px] text-white flex items-center justify-center font-medium">Publish</div>
+                                     <div className="h-6 w-6 rounded-full bg-slate-200"></div>
+                                  </div>
+                               </div>
+                               
+                               {/* Mock dashboard body */}
+                               <div className="flex-1 bg-slate-50 flex p-4 gap-4">
+                                  {/* Left sidebar mock */}
+                                  <div className="w-1/4 rounded-lg bg-white border border-slate-100 shadow-sm p-3 flex flex-col gap-2">
+                                     <div className="h-4 w-1/2 bg-slate-100 rounded"></div>
+                                     <div className="h-8 w-full bg-indigo-50 rounded mt-2"></div>
+                                     <div className="h-8 w-full bg-slate-50 rounded"></div>
+                                     <div className="h-8 w-full bg-slate-50 rounded"></div>
+                                  </div>
+                                  {/* Main content mock */}
+                                  <div className="flex-1 rounded-lg bg-white border border-slate-100 shadow-sm p-4 flex flex-col gap-3 relative">
+                                    <div className="h-6 w-1/3 bg-slate-100 rounded mb-2"></div>
+                                    <div className="h-24 w-full bg-slate-50 rounded-md border border-slate-100"></div>
+                                    <div className="absolute bottom-4 left-4 right-4 h-10 rounded-full bg-white shadow-[0_2px_15px_-3px_rgba(0,0,0,0.1)] border border-slate-200 flex items-center px-4 justify-between">
+                                      <div className="h-4 w-1/3 bg-slate-100 rounded"></div>
+                                      <div className="h-6 w-6 bg-indigo-600 rounded-full"></div>
+                                    </div>
+                                  </div>
                                </div>
                            </div>
                         </div>
@@ -876,8 +907,8 @@ export default function App() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Professional">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Professional <span className="text-slate-500 font-normal text-xs ml-1">(Business)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -887,11 +918,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Professional Tone</p>
                         <p className="text-slate-200 leading-relaxed">Adapts the text for a professional or business environment. Uses formal, clear, and objective language, eliminating slang to ensure it is appropriate for the workplace.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Casual">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Casual <span className="text-slate-500 font-normal text-xs ml-1">(Friendly)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -901,11 +932,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Casual Tone</p>
                         <p className="text-slate-200 leading-relaxed">Transforms the text into a relaxed, conversational tone. Uses simpler vocabulary and a relatable style, perfect for messages to friends or informal settings.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Academic">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Academic <span className="text-slate-500 font-normal text-xs ml-1">(Formal)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -915,11 +946,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Academic Tone</p>
                         <p className="text-slate-200 leading-relaxed">Optimizes for scholarly contexts. Elevates vocabulary, ensures rigorous phrasing, and structures arguments logically for essays and research papers.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Persuasive">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Persuasive <span className="text-slate-500 font-normal text-xs ml-1">(Marketing)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -929,11 +960,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Persuasive Tone</p>
                         <p className="text-slate-200 leading-relaxed">Focuses on convincing the reader. Uses compelling language, highlights benefits, and employs rhetorical devices to captivate and drive action.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Empathetic">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Empathetic <span className="text-slate-500 font-normal text-xs ml-1">(Support)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -943,11 +974,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Empathetic Tone</p>
                         <p className="text-slate-200 leading-relaxed">Softens the text to convey compassion and support. Ideal for sensitive topics, customer service, or situations where acknowledging feelings is paramount.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Creative">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Creative <span className="text-slate-500 font-normal text-xs ml-1">(Storytelling)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -957,11 +988,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Creative Tone</p>
                         <p className="text-slate-200 leading-relaxed">Injects imagination and flair. Uses vivid imagery, metaphors, and storytelling techniques to make the narrative more captivating.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Formal">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Formal <span className="text-slate-500 font-normal text-xs ml-1">(Polite)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -971,11 +1002,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Formal Tone</p>
                         <p className="text-slate-200 leading-relaxed">Enforces traditional etiquette and politeness. Highly structured and respectful, suitable for official correspondence or addressing dignitaries.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Informal">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Informal <span className="text-slate-500 font-normal text-xs ml-1">(Everyday)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -985,11 +1016,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Informal Tone</p>
                         <p className="text-slate-200 leading-relaxed">Creates a breezy, laid-back feel. Perfect for quick updates, internal chats, or interactions where strict grammar can be relaxed.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Humorous">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Humorous <span className="text-slate-500 font-normal text-xs ml-1">(Funny)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -999,11 +1030,11 @@ export default function App() {
                         <p className="font-semibold mb-1">Humorous Tone</p>
                         <p className="text-slate-200 leading-relaxed">Infuses playfulness and lightheartedness. Aims to entertain, using clever phrasing or mild exaggeration to bring a smile.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                   <SelectItem value="Technical">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <TooltipProvider delay={0}><Tooltip>
+                      <TooltipTrigger>
                         <span className="w-full flex items-center justify-between">
                           <span>Technical <span className="text-slate-500 font-normal text-xs ml-1">(Expert)</span></span>
                           <Info size={14} className="text-slate-400 ml-2" />
@@ -1013,7 +1044,7 @@ export default function App() {
                         <p className="font-semibold mb-1">Technical Tone</p>
                         <p className="text-slate-200 leading-relaxed">Refines text for an expert audience. Uses precise terminology and detailed explanations, ideal for documentation and technical discussions.</p>
                       </TooltipContent>
-                    </Tooltip>
+                    </Tooltip></TooltipProvider>
                   </SelectItem>
                 </SelectContent>
               </Select>
