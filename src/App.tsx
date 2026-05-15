@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock, Download, FileText, File } from "lucide-react";
+import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock, Download, FileText, File, Bold, Italic, Underline as UnderlineIcon, Undo, Redo, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
 import { Label } from "./components/ui/label";
@@ -9,10 +9,17 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { ScrollArea } from "./components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./components/ui/dropdown-menu";
 import { Toaster, toast } from "sonner";
-import ReactMarkdown from 'react-markdown';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import { marked } from 'marked';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { jsPDF } from "jspdf";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { saveAs } from "file-saver";
+import LanguageDetect from 'languagedetect';
+
+const lngDetector = new LanguageDetect();
 
 interface HistoryItem {
   id: string;
@@ -36,6 +43,7 @@ export default function App() {
   
   const [isCopied, setIsCopied] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceCommand, setVoiceCommand] = useState<string | null>(null);
   
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -43,10 +51,45 @@ export default function App() {
   // Suggestions state
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
   const suggestionTimeoutRef = useRef<any>(null);
+
+  // Synonyms state
+  const [synonyms, setSynonyms] = useState<string[]>([]);
+  const [showSynonyms, setShowSynonyms] = useState(false);
+  const [selectedWordRange, setSelectedWordRange] = useState<{start: number, end: number, text: string} | null>(null);
+  const [isFetchingSynonyms, setIsFetchingSynonyms] = useState(false);
+  const selectedWordTimeoutRef = useRef<any>(null);
 
   const recognitionRef = useRef<any>(null);
   const originalTextRef = useRef("");
+
+  const editor = useEditor({
+    extensions: [StarterKit, Underline],
+    content: outputText,
+    onUpdate: ({ editor }) => {
+      setOutputText(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class: 'h-full outline-none'
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (editor && outputText && outputText !== editor.getHTML()) {
+      try {
+        const parsedHtml = marked.parse(outputText) as string;
+        editor.commands.setContent(parsedHtml);
+        setOutputText(parsedHtml);
+      } catch (e) {
+        console.error("Markdown parsing error", e);
+      }
+    } else if (editor && !outputText) {
+      editor.commands.setContent('');
+    }
+  }, [outputText, editor]);
 
   useEffect(() => {
     const saved = localStorage.getItem("polisher_history");
@@ -73,6 +116,20 @@ export default function App() {
       if (suggestionTimeoutRef.current) clearTimeout(suggestionTimeoutRef.current);
       
       suggestionTimeoutRef.current = setTimeout(async () => {
+        // Detect language
+        const detected = lngDetector.detect(inputText, 1);
+        if (detected && detected.length > 0) {
+          const lang = detected[0][0].toLowerCase();
+          switch (lang) {
+            case 'english': setLanguage('English'); break;
+            case 'spanish': setLanguage('Spanish'); break;
+            case 'french': setLanguage('French'); break;
+            case 'german': setLanguage('German'); break;
+            case 'polish': setLanguage('Polish'); break;
+            case 'japanese': setLanguage('Japanese'); break;
+          }
+        }
+
         try {
           const res = await fetch("/api/suggest", {
             method: "POST",
@@ -83,6 +140,7 @@ export default function App() {
             const data = await res.json();
             if (data.suggestions && data.suggestions.length > 0) {
               setSuggestions(data.suggestions);
+              setSuggestionIndex(0);
               setShowSuggestions(true);
             } else {
               setShowSuggestions(false);
@@ -122,10 +180,27 @@ export default function App() {
         recognitionRef.current.onresult = (event: any) => {
           let interimTranscript = "";
           for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
+            
             if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript;
+              const cleanedTranscript = transcript.trim().toLowerCase().replace(/[.,!?;]+$/, '');
+              if (cleanedTranscript === "clear input" || cleanedTranscript === "clear text") {
+                finalTranscript = "";
+                originalTextRef.current = "";
+                toast.success("Input cleared via voice command.");
+                continue;
+              } else if (cleanedTranscript === "polish text" || cleanedTranscript === "polish my text") {
+                setVoiceCommand("polish");
+                recognitionRef.current.stop();
+                continue;
+              } else if (cleanedTranscript === "show history" || cleanedTranscript === "open history") {
+                setVoiceCommand("history");
+                recognitionRef.current.stop();
+                continue;
+              }
+              finalTranscript += transcript;
             } else {
-              interimTranscript += event.results[i][0].transcript;
+              interimTranscript += transcript;
             }
           }
           
@@ -164,6 +239,54 @@ export default function App() {
         toast.error("Could not start recording: " + e.message);
       }
     }
+  };
+
+  const fetchSynonyms = async (word: string, context: string) => {
+    setIsFetchingSynonyms(true);
+    setShowSynonyms(true);
+    setSynonyms([]);
+    
+    try {
+      const res = await fetch("/api/synonyms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word, context }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.synonyms && data.synonyms.length > 0) {
+          setSynonyms(data.synonyms);
+        } else {
+          setShowSynonyms(false);
+        }
+      }
+    } catch (e) {
+      console.error("Synonyms error:", e);
+      setShowSynonyms(false);
+    } finally {
+      setIsFetchingSynonyms(false);
+    }
+  };
+
+  const handleSelection = (e: any) => {
+    const target = e.target;
+    if (selectedWordTimeoutRef.current) clearTimeout(selectedWordTimeoutRef.current);
+    
+    selectedWordTimeoutRef.current = setTimeout(() => {
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      if (start !== end) {
+        const text = target.value.substring(start, end);
+        if (text.trim() && text.trim().split(/\s+/).length <= 2) {
+          setSelectedWordRange({ start, end, text: text.trim() });
+          fetchSynonyms(text.trim(), target.value.substring(Math.max(0, start - 30), Math.min(target.value.length, end + 30)));
+        } else {
+          setShowSynonyms(false);
+        }
+      } else {
+        setShowSynonyms(false);
+      }
+    }, 200); // 200ms debounce
   };
 
   const handlePolish = async () => {
@@ -219,17 +342,39 @@ export default function App() {
     }
   };
 
-  const copyToClipboard = () => {
+  const getPlainText = () => {
+    return editor ? editor.getText() : outputText.replace(/<[^>]+>/g, '');
+  };
+
+  const copyToClipboard = async () => {
     if (!outputText) return;
-    navigator.clipboard.writeText(outputText);
-    setIsCopied(true);
-    toast("Copied to clipboard");
-    setTimeout(() => setIsCopied(false), 2000);
+    try {
+      if (editor) {
+        const html = editor.getHTML();
+        const text = editor.getText();
+        const clipboardItem = new ClipboardItem({
+          "text/plain": new Blob([text], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" }),
+        });
+        await navigator.clipboard.write([clipboardItem]);
+      } else {
+        await navigator.clipboard.writeText(getPlainText());
+      }
+      setIsCopied(true);
+      toast("Copied to clipboard");
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (e) {
+      console.error(e);
+      navigator.clipboard.writeText(getPlainText());
+      setIsCopied(true);
+      toast("Copied to clipboard");
+      setTimeout(() => setIsCopied(false), 2000);
+    }
   };
 
   const downloadTxt = () => {
     if (!outputText) return;
-    const blob = new Blob([outputText], { type: 'text/plain' });
+    const blob = new Blob([getPlainText()], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -248,7 +393,7 @@ export default function App() {
         sections: [
           {
             properties: {},
-            children: outputText.split('\n').map(line => new Paragraph({
+            children: getPlainText().split('\n').map(line => new Paragraph({
               children: [new TextRun(line)],
             })),
           },
@@ -268,7 +413,7 @@ export default function App() {
     if (!outputText) return;
     try {
       const doc = new jsPDF();
-      const splitText = doc.splitTextToSize(outputText, 180);
+      const splitText = doc.splitTextToSize(getPlainText(), 180);
       doc.text(splitText, 15, 15);
       doc.save(`polished_text_${new Date().getTime()}.pdf`);
       toast.success("Text exported as .pdf");
@@ -288,8 +433,56 @@ export default function App() {
     toast.success("Reverted to previous version");
   };
 
+  useEffect(() => {
+    if (voiceCommand) {
+      if (voiceCommand === "polish") {
+        toast.success("Polishing text...");
+        handlePolish();
+      } else if (voiceCommand === "history") {
+        setIsHistoryOpen(true);
+      }
+      setVoiceCommand(null);
+    }
+  }, [voiceCommand, handlePolish]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + Enter -> Polish
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handlePolish();
+      }
+      
+      // Cmd/Ctrl + Shift + C -> Copy
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        if (outputText || editor?.getText()) {
+          copyToClipboard();
+        }
+      }
+
+      // Cmd/Ctrl + Shift + X -> Clear Input
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        setInputText("");
+        originalTextRef.current = "";
+        toast.info("Input cleared");
+      }
+
+      // Cmd/Ctrl + Shift + H -> Open History
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        setIsHistoryOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handlePolish, copyToClipboard, outputText, editor, setInputText]);
+
   return (
-    <div className="h-screen w-full flex flex-col bg-[#f8f9fa] font-sans text-slate-900">
+    <TooltipProvider>
+      <div className="h-screen w-full flex flex-col bg-[#f8f9fa] font-sans text-slate-900">
       <Toaster position="top-center" />
       
       {/* Header */}
@@ -304,7 +497,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-slate-500 font-medium gap-2">
+              <Button variant="ghost" size="sm" className="text-slate-500 font-medium gap-2" title="View history (⌘/Ctrl + Shift + H)">
                 <History size={16} />
                 History
               </Button>
@@ -385,7 +578,7 @@ export default function App() {
                       size="icon"
                       className="h-7 w-7 text-slate-400 hover:text-red-500"
                       onClick={() => setInputText("")}
-                      title="Clear text"
+                      title="Clear text (⌘/Ctrl + Shift + X)"
                     >
                       <Trash2 size={14} />
                     </Button>
@@ -399,23 +592,39 @@ export default function App() {
                   >
                     {isRecording ? <MicOff size={14} className="animate-pulse" /> : <Mic size={14} />}
                   </Button>
-                  <span className="text-xs text-slate-400 font-mono">{inputText.length} chars</span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {inputText.trim() ? inputText.trim().split(/\s+/).length : 0} words &bull; {inputText.length} chars
+                  </span>
                 </div>
               </div>
               <div className="relative flex-1 flex flex-col">
                 <Textarea 
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
+                  onChange={(e) => {
+                    setInputText(e.target.value);
+                    setShowSynonyms(false);
+                  }}
+                  onMouseUp={handleSelection}
+                  onKeyUp={handleSelection}
                   className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 p-4 md:p-6 text-[15px] leading-relaxed font-sans placeholder:text-slate-400 rounded-none bg-white" 
                   placeholder="Paste, type, or dictate the text you want to improve here..." 
                 />
                 
                 {/* Auto Suggestions */}
-                {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute bottom-4 left-4 z-10 flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2">
-                    {suggestions.map((suggestion, i) => (
+                {showSuggestions && suggestions.length > 0 && !showSynonyms && (
+                  <div className="absolute bottom-4 left-4 z-10 flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2 items-center">
+                    {suggestions.length > 3 && (
                       <button 
-                        key={i}
+                        onClick={() => setSuggestionIndex(Math.max(0, suggestionIndex - 3))}
+                        disabled={suggestionIndex === 0}
+                        className="bg-slate-800 text-slate-100 border border-slate-700 h-8 w-8 flex justify-center rounded-full shadow-md hover:bg-slate-700 transition-colors items-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                    )}
+                    {suggestions.slice(suggestionIndex, suggestionIndex + 3).map((suggestion, i) => (
+                      <button 
+                        key={suggestionIndex + i}
                         onClick={() => {
                           const newText = inputText + (inputText.endsWith(' ') ? '' : ' ') + suggestion;
                           setInputText(newText);
@@ -424,10 +633,56 @@ export default function App() {
                         }}
                         className="bg-slate-800 text-slate-100 border border-slate-700 text-sm px-3 py-1.5 rounded-full shadow-md hover:bg-slate-700 transition-colors flex items-center gap-1.5 font-medium"
                       >
-                        <Sparkles size={12} className="text-blue-400" />
-                        {suggestion}
+                        <Sparkles size={12} className="text-blue-400 shrink-0" />
+                        <span className="truncate max-w-[200px]">{suggestion}</span>
                       </button>
                     ))}
+                    {suggestions.length > 3 && (
+                      <button 
+                        onClick={() => setSuggestionIndex(Math.min(suggestions.length - 3, suggestionIndex + 3))}
+                        disabled={suggestionIndex >= suggestions.length - 3}
+                        className="bg-slate-800 text-slate-100 border border-slate-700 h-8 w-8 flex justify-center rounded-full shadow-md hover:bg-slate-700 transition-colors items-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Synonyms */}
+                {showSynonyms && (
+                  <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 max-w-[250px] animate-in fade-in slide-in-from-top-2 bg-white border shadow-lg rounded-xl p-3">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Synonyms for "{selectedWordRange?.text}"
+                    </span>
+                    {isFetchingSynonyms ? (
+                      <div className="flex items-center gap-2 text-slate-500 text-sm py-2">
+                        <Loader2 size={14} className="animate-spin text-blue-500" /> Finding synonyms...
+                      </div>
+                    ) : synonyms.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {synonyms.map((synonym, i) => (
+                          <button 
+                            key={i}
+                            onClick={() => {
+                              if (selectedWordRange) {
+                                const before = inputText.substring(0, selectedWordRange.start);
+                                const after = inputText.substring(selectedWordRange.end);
+                                // The new start/end might be tricky due to trimming in select, we should just use substring substitution based on exact range.
+                                setInputText(before + synonym + after);
+                                setShowSynonyms(false);
+                                setSynonyms([]);
+                              }
+                            }}
+                            className="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-1 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium"
+                          >
+                            {synonym}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500 italic py-1">No synonyms found.</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -443,7 +698,7 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   {outputText && (
                     <>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500" onClick={copyToClipboard} title="Copy to clipboard">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500" onClick={copyToClipboard} title="Copy to clipboard (⌘/Ctrl + Shift + C)">
                         {isCopied ? <Check size={14} /> : <Copy size={14} />}
                       </Button>
                       <DropdownMenu>
@@ -469,17 +724,74 @@ export default function App() {
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500 hidden md:flex" title="Fullscreen">
                     <Maximize2 size={14} />
                   </Button>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {editor ? editor.getText().length : (outputText ? outputText.length : 0)} chars
+                  </span>
                 </div>
               </div>
-              <div className="flex-1 p-4 md:p-6 overflow-auto">
+              <div className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col">
                 {isLoading ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
                     <Loader2 size={24} className="animate-spin text-blue-500" />
                     <p className="text-sm">Polishing your text...</p>
                   </div>
                 ) : outputText ? (
-                  <div className="prose prose-slate prose-sm md:prose-base max-w-none prose-p:leading-relaxed text-[15px]">
-                    <ReactMarkdown>{outputText}</ReactMarkdown>
+                  <div className="flex-1 flex flex-col min-h-0">
+                    {editor && (
+                      <div className="flex items-center gap-1 mb-3 pb-3 border-b shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${editor.isActive('bold') ? 'bg-slate-200' : ''}`}
+                          onClick={() => editor.chain().focus().toggleBold().run()}
+                          title="Bold"
+                        >
+                          <Bold size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${editor.isActive('italic') ? 'bg-slate-200' : ''}`}
+                          onClick={() => editor.chain().focus().toggleItalic().run()}
+                          title="Italic"
+                        >
+                          <Italic size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${editor.isActive('underline') ? 'bg-slate-200' : ''}`}
+                          onClick={() => editor.chain().focus().toggleUnderline().run()}
+                          title="Underline"
+                        >
+                          <UnderlineIcon size={14} />
+                        </Button>
+                        <div className="w-px h-4 bg-slate-200 mx-1" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => editor.chain().focus().undo().run()}
+                          disabled={!editor.can().undo()}
+                          title="Undo"
+                        >
+                          <Undo size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => editor.chain().focus().redo().run()}
+                          disabled={!editor.can().redo()}
+                          title="Redo"
+                        >
+                          <Redo size={14} />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="flex-1 overflow-auto">
+                      <EditorContent editor={editor} className="prose prose-slate prose-sm md:prose-base max-w-none prose-p:leading-relaxed text-[15px] h-full" />
+                    </div>
                   </div>
                 ) : (
                   <div className="h-full flex items-center justify-center text-slate-400 text-sm">
@@ -510,12 +822,106 @@ export default function App() {
                   <SelectValue placeholder="Select a tone" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Professional">Professional <span className="text-slate-400 font-normal text-xs ml-1">(Business)</span></SelectItem>
-                  <SelectItem value="Casual">Casual <span className="text-slate-400 font-normal text-xs ml-1">(Friendly)</span></SelectItem>
-                  <SelectItem value="Academic">Academic <span className="text-slate-400 font-normal text-xs ml-1">(Formal)</span></SelectItem>
-                  <SelectItem value="Persuasive">Persuasive <span className="text-slate-400 font-normal text-xs ml-1">(Marketing)</span></SelectItem>
-                  <SelectItem value="Empathetic">Empathetic <span className="text-slate-400 font-normal text-xs ml-1">(Support)</span></SelectItem>
-                  <SelectItem value="Creative">Creative <span className="text-slate-400 font-normal text-xs ml-1">(Storytelling)</span></SelectItem>
+                  <SelectItem value="Professional">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Professional <span className="text-slate-400 font-normal text-xs ml-1">(Business)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Clear, crisp, and authoritative. Projects competence and reliability for workplace communication.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Casual">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Casual <span className="text-slate-400 font-normal text-xs ml-1">(Friendly)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Warm, relaxed, and conversational. Like chatting with a friend over coffee.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Academic">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Academic <span className="text-slate-400 font-normal text-xs ml-1">(Formal)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Rigorous, objective, and scholarly. Employs sophisticated vocabulary and structured arguments.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Persuasive">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Persuasive <span className="text-slate-400 font-normal text-xs ml-1">(Marketing)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Compelling and action-oriented. Designed to captivate your audience and drive them to say "yes".</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Empathetic">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Empathetic <span className="text-slate-400 font-normal text-xs ml-1">(Support)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Compassionate, understanding, and supportive. Ideal for navigating sensitive topics with care.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Creative">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Creative <span className="text-slate-400 font-normal text-xs ml-1">(Storytelling)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Imaginative, vivid, and colorful. Weaves a narrative that engages the senses and sparks curiosity.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Formal">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Formal <span className="text-slate-400 font-normal text-xs ml-1">(Polite)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Polite, structured, and respectful. Adheres to traditional etiquette for official correspondence.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Informal">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Informal <span className="text-slate-400 font-normal text-xs ml-1">(Everyday)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Breezy and natural. Perfect for quick notes, everyday updates, and laid-back interactions.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Humorous">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Humorous <span className="text-slate-400 font-normal text-xs ml-1">(Funny)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Witty, playful, and lighthearted. Injects charm and amusement to bring a smile to your reader.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
+                  <SelectItem value="Technical">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span className="w-full flex">Technical <span className="text-slate-400 font-normal text-xs ml-1">(Expert)</span></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[200px] text-xs">
+                        <p>Precise, analytical, and detailed. Uses exact terminology for documentation and expert peers.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -561,6 +967,7 @@ export default function App() {
                 onClick={handlePolish} 
                 disabled={isLoading || !inputText.trim()}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm h-10 gap-2 font-medium"
+                title="Polish text (⌘/Ctrl + Enter)"
               >
                 {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                 {isLoading ? "Running..." : "Polish"}
@@ -573,6 +980,7 @@ export default function App() {
         </aside>
 
       </div>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

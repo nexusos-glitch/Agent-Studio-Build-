@@ -77,7 +77,7 @@ async function startServer() {
         }
       });
 
-      const systemInstruction = "You are an auto-suggest autocomplete tool. Provide 3 short phrases (max 5 words each) that logically complete or continue the user's text. Reply with ONLY a JSON array of strings (e.g. [\"first suggestion\", \"second option\", \"third idea\"]).";
+      const systemInstruction = "You are an auto-suggest autocomplete tool. Provide 8 short phrases (max 5 words each) that logically complete or continue the user's text. Reply with ONLY a JSON array of strings (e.g. [\"first suggestion\", \"second option\", \"third idea\"]).";
 
       const response = await ai.models.generateContent({
         model: "gemini-3.1-pro-preview",
@@ -102,6 +102,56 @@ async function startServer() {
     } catch (error: any) {
       console.error("Error in suggest API:", error);
       res.status(500).json({ error: "Failed to generate suggestions" });
+    }
+  });
+
+  app.post("/api/synonyms", async (req, res) => {
+    try {
+      const { word, context } = req.body;
+      
+      if (!word) {
+        return res.status(400).json({ error: "Word is required" });
+      }
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Gemini API Key is not configured." });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const systemInstruction = "You are a thesaurus tool. Provide 3 to 5 synonyms for the specified word, keeping the same part of speech and considering the provided context. Reply with ONLY a JSON array of strings.";
+      const prompt = `Word: "${word}"\nContext: "${context || ''}"`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          temperature: 0.3,
+          responseMimeType: "application/json",
+        },
+      });
+
+      let synonyms: string[] = [];
+      try {
+        if (response.text) {
+          synonyms = JSON.parse(response.text);
+        }
+      } catch (e) {
+        console.error("Failed to parse synonyms", e, response.text);
+      }
+
+      res.json({ synonyms });
+    } catch (error: any) {
+      console.error("Error in synonyms API:", error);
+      res.status(500).json({ error: "Failed to generate synonyms" });
     }
   });
 
