@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock, Download, FileText, File, Bold, Italic, Underline as UnderlineIcon, Undo, Redo, ChevronLeft, ChevronRight, Info, Plus, MessageSquare, Share2, Rocket, GitBranch, Github, Key, Link2, CopyPlus } from "lucide-react";
+import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock, Download, FileText, File, Bold, Italic, Underline as UnderlineIcon, Undo, Redo, ChevronLeft, ChevronRight, Info, Plus, MessageSquare, Share2, Rocket, GitBranch, Github, Key, Link2, CopyPlus, User, Shield, HardDriveDownload } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
 import { Label } from "./components/ui/label";
@@ -608,11 +608,41 @@ export default function App() {
               </ScrollArea>
             </SheetContent>
           </Sheet>
-          <Button variant="ghost" size="sm" className="text-slate-500 font-medium">Docs</Button>
-          <Button variant="ghost" size="sm" className="text-slate-500 font-medium">Share</Button>
-          <div className="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 font-semibold text-sm">
-            U
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold ml-2">
+                U
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <div className="p-3 bg-slate-50 border-b flex flex-col gap-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase">Signed in as</span>
+                <span className="text-sm font-medium text-slate-800">nexusos@</span>
+              </div>
+              <DropdownMenuItem className="p-3 cursor-pointer mt-1">
+                <div className="flex items-center gap-2">
+                  <User size={14} className="text-slate-500" />
+                  <span className="font-medium">Profile Settings</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="p-3 cursor-pointer">
+                <div className="flex items-center gap-2">
+                  <Shield size={14} className="text-indigo-500" />
+                  <span className="font-medium text-indigo-700">Admin Area</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="p-3 cursor-pointer">
+                <div className="flex items-center gap-2">
+                  <HardDriveDownload size={14} className="text-slate-500" />
+                  <span className="font-medium">Save to Computer</span>
+                </div>
+              </DropdownMenuItem>
+              <Separator />
+              <DropdownMenuItem className="p-3 cursor-pointer text-red-600">
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
