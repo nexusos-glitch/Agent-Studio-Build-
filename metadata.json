@@ -1,0 +1,10 @@
+{
+  "name": "AI Text Polisher",
+  "description": "A Gemini-powered text polishing tool with an interface inspired by Google AI Studio.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
