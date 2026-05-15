@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock, Download, FileText, File, Bold, Italic, Underline as UnderlineIcon, Undo, Redo, ChevronLeft, ChevronRight, Info, Plus } from "lucide-react";
+import { Sparkles, Settings, Copy, Check, Wand2, Loader2, Maximize2, Mic, MicOff, Trash2, History, Clock, Download, FileText, File, Bold, Italic, Underline as UnderlineIcon, Undo, Redo, ChevronLeft, ChevronRight, Info, Plus, MessageSquare, Share2, Rocket, GitBranch, Github, Key, Link2, CopyPlus } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Textarea } from "./components/ui/textarea";
 import { Label } from "./components/ui/label";
@@ -486,20 +486,76 @@ export default function App() {
       <Toaster position="top-center" />
       
       {/* Header */}
-      <header className="h-14 border-b bg-white flex items-center px-6 justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 text-white rounded-md flex items-center justify-center">
-            <Wand2 size={18} />
-          </div>
-          <h1 className="text-lg font-medium text-slate-800 tracking-tight">AI Text Polisher</h1>
-          <span className="ml-2 text-xs font-medium px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Studio</span>
-        </div>
+      <header className="h-14 border-b bg-white flex items-center px-4 justify-between shrink-0 overflow-x-auto">
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 pr-4 border-r border-slate-200">
+            <div className="w-8 h-8 bg-blue-600 text-white rounded-md flex items-center justify-center shrink-0">
+              <Wand2 size={18} />
+            </div>
+            <h1 className="text-lg font-semibold text-slate-800 tracking-tight whitespace-nowrap hidden sm:block">Agent Studio</h1>
+          </div>
+          
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Button variant="ghost" size="sm" className="text-slate-600 font-medium whitespace-nowrap">
+              <MessageSquare size={16} className="mr-2" />
+              Agent Chat
+            </Button>
+            <Button variant="ghost" size="sm" className="text-slate-600 font-medium whitespace-nowrap">
+              <GitBranch size={16} className="mr-2" />
+              Version
+            </Button>
+            <Button variant="ghost" size="sm" className="text-slate-600 font-medium whitespace-nowrap">
+              <Key size={16} className="mr-2" />
+              Secrets
+            </Button>
+            <Button variant="ghost" size="sm" className="text-slate-600 font-medium whitespace-nowrap">
+              <Link2 size={16} className="mr-2" />
+              Integrations
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-slate-600 font-medium whitespace-nowrap hidden md:flex">
+                  <Github size={16} className="mr-2" />
+                  GitHub Sync
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[300px]">
+                <div className="p-3 bg-slate-50 border-b flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-slate-500 uppercase">Connected Repository</span>
+                  <span className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                    <Github size={14} /> nexusos-glitch/Agent-Studio-Build-
+                  </span>
+                  <span className="text-xs text-slate-500">Branch: <span className="font-mono bg-slate-200 px-1 rounded">main</span></span>
+                </div>
+                <DropdownMenuItem className="p-3 cursor-pointer">
+                  <div className="flex flex-col">
+                    <span className="font-medium">Sync to GitHub</span>
+                    <span className="text-xs text-slate-500">Push your latest changes to the main branch.</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 pl-4 ml-auto border-l border-slate-200">
+          <Button variant="ghost" size="sm" className="hidden lg:flex text-slate-500 hover:text-slate-700">
+            <Share2 size={16} className="mr-2" /> Share
+          </Button>
+          <Button variant="ghost" size="sm" className="hidden lg:flex text-slate-500 hover:text-slate-700">
+            <Rocket size={16} className="mr-2" /> Publish
+          </Button>
+          <Button variant="outline" size="sm" className="hidden lg:flex bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+            <CopyPlus size={16} className="mr-2" /> Remix
+          </Button>
+          
           <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-slate-500 font-medium gap-2" title="View history (⌘/Ctrl + Shift + H)">
-                <History size={16} />
-                History
+              <Button variant="ghost" size="icon" className="text-slate-500" title="View history (⌘/Ctrl + Shift + H)">
+                <History size={18} />
+                <span className="sr-only">History</span>
               </Button>
             </SheetTrigger>
             <SheetContent className="w-[400px] sm:w-[540px] flex flex-col p-6 font-sans">
